@@ -60,7 +60,7 @@ installer/mac/build_pkg.sh build/WantedLevel_artefacts/Release 1.0.0   # crea di
 ### Windows (VST3)
 Servono Visual Studio 2022 (con "Sviluppo di applicazioni desktop C++"), CMake e Inno Setup 6.
 ```bat
-cmake -B build -G "Visual Studio 17 2022" -A x64
+cmake -B build -A x64
 cmake --build build --config Release
 "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\windows\WantedLevel.iss
 ```
