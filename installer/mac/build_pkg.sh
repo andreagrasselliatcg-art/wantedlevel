@@ -42,10 +42,13 @@ make_component () {   # $1 = root, $2 = id, $3 = install location, $4 = nome fil
     pkgbuild --analyze --root "$1" "$plist" >/dev/null
     # se pkgbuild riconosce il bundle, impedisci che venga "spostato" altrove:
     # i plug-in devono finire sempre nella cartella di sistema
-    if /usr/libexec/PlistBuddy -c "Print :0" "$plist" >/dev/null 2>&1; then
-        /usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$plist"
+    local i=0
+    while /usr/libexec/PlistBuddy -c "Print :$i" "$plist" >/dev/null 2>&1; do
+        /usr/libexec/PlistBuddy -c "Delete :$i:BundleIsRelocatable" "$plist" >/dev/null 2>&1 || true
+        /usr/libexec/PlistBuddy -c "Add :$i:BundleIsRelocatable bool false" "$plist"
         extra=(--component-plist "$plist")
-    fi
+        i=$((i + 1))
+    done
     pkgbuild --root "$1" ${extra[@]+"${extra[@]}"} \
              --identifier "$2" --version "$VERSION" \
              --install-location "$3" "$WORK/pkgs/$4"
