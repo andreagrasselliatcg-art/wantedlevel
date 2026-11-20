@@ -1,0 +1,127 @@
+# =============================================================================
+#  Wanted Level - build, test e installer
+#
+#  - ad ogni push: compila, verifica il plug-in (auval per Logic, pluginval per
+#    VST3/Ableton) e crea gli installer, scaricabili da Actions -> Artifacts
+#  - con un tag "v1.0.0", "v1.1.0", ...: pubblica anche una Release su GitHub
+#    con i due installer allegati
+# =============================================================================
+name: Build Wanted Level
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ "v*" ]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  BUILD_DIR: build
+  ARTEFACTS: build/WantedLevel_artefacts/Release
+
+jobs:
+  # ---------------------------------------------------------------------------
+  macos:
+    name: macOS (VST3 + AU, universal)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versione
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF_NAME#v}"; else V="1.0.0"; fi
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: cmake -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build "$BUILD_DIR" --config Release --parallel 4
+
+      - name: Firma ad-hoc (necessaria su Apple Silicon)
+        run: |
+          codesign --force --deep -s - "$HOME/Library/Audio/Plug-Ins/Components/Wanted Level.component"
+          codesign --force --deep -s - "$HOME/Library/Audio/Plug-Ins/VST3/Wanted Level.vst3"
+
+      - name: Test Audio Unit (auval, come fa Logic)
+        run: |
+          killall -9 AudioComponentRegistrar || true
+          auval -a | grep -i "Tntk" || (echo "AU non registrato" && exit 1)
+          auval -v aufx Wntd Tntk
+
+      - name: Test VST3 (pluginval)
+        run: |
+          curl -sSL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_macOS.zip
+          unzip -q pluginval.zip
+          ./pluginval.app/Contents/MacOS/pluginval --strictness-level 5 --skip-gui-tests \
+              --validate "$ARTEFACTS/VST3/Wanted Level.vst3"
+
+      - name: Crea installer .pkg
+        run: installer/mac/build_pkg.sh "$ARTEFACTS" "$VERSION"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WantedLevel-macOS-installer
+          path: dist/*.pkg
+
+  # ---------------------------------------------------------------------------
+  windows:
+    name: Windows (VST3)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versione
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then V="${GITHUB_REF_NAME#v}"; else V="1.0.0"; fi
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Test VST3 (pluginval)
+        shell: bash
+        run: |
+          curl -sSL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/latest/download/pluginval_Windows.zip
+          unzip -q pluginval.zip
+          ./pluginval.exe --strictness-level 5 --skip-gui-tests --validate "$ARTEFACTS/VST3/Wanted Level.vst3"
+
+      - name: Installa Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Crea installer .exe
+        working-directory: installer/windows
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$env:VERSION" WantedLevel.iss'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WantedLevel-Windows-installer
+          path: dist/*.exe
+
+  # ---------------------------------------------------------------------------
+  release:
+    name: Pubblica Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [ macos, windows ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Wanted Level ${{ github.ref_name }}
+          files: dist/*
+          body: |
+            ★★★★★ **Wanted Level** di Tune Talks
+
+            - **macOS** (Intel + Apple Silicon): scarica il `.pkg` e aprilo. Installa VST3 e AU (Logic Pro, Ableton Live, GarageBand e altre DAW).
+            - **Windows** (64 bit): scarica il `.exe` e avvialo. Installa il VST3 (Ableton Live, FL Studio, Cubase e altre DAW).

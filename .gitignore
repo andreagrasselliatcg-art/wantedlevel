@@ -1,0 +1,6 @@
+build/
+dist/
+pkgwork/
+*.otf
+*.ttf
+.DS_Store
