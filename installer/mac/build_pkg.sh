@@ -38,10 +38,15 @@ done
 # --- un pacchetto per componente --------------------------------------------
 make_component () {   # $1 = root, $2 = id, $3 = install location, $4 = nome file
     local plist="$WORK/$2.plist"
-    pkgbuild --analyze --root "$1" "$plist"
-    # i plug-in vanno sempre nella cartella di sistema, mai "spostati" altrove
-    /usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$plist"
-    pkgbuild --root "$1" --component-plist "$plist" \
+    local extra=()
+    pkgbuild --analyze --root "$1" "$plist" >/dev/null
+    # se pkgbuild riconosce il bundle, impedisci che venga "spostato" altrove:
+    # i plug-in devono finire sempre nella cartella di sistema
+    if /usr/libexec/PlistBuddy -c "Print :0" "$plist" >/dev/null 2>&1; then
+        /usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$plist"
+        extra=(--component-plist "$plist")
+    fi
+    pkgbuild --root "$1" "${extra[@]}" \
              --identifier "$2" --version "$VERSION" \
              --install-location "$3" "$WORK/pkgs/$4"
 }
