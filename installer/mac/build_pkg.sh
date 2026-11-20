@@ -46,7 +46,7 @@ make_component () {   # $1 = root, $2 = id, $3 = install location, $4 = nome fil
         /usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$plist"
         extra=(--component-plist "$plist")
     fi
-    pkgbuild --root "$1" "${extra[@]}" \
+    pkgbuild --root "$1" ${extra[@]+"${extra[@]}"} \
              --identifier "$2" --version "$VERSION" \
              --install-location "$3" "$WORK/pkgs/$4"
 }
